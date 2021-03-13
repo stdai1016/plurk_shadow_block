@@ -49,19 +49,30 @@
   if (curLang.toLowerCase() in LANG) lang = LANG[curLang.toLowerCase()];
 
   /* ======= storage ======= */
-  const DEFAULT_VALUE = {
+  const DEFAULT_GM_VALUE = {
     replurk: true,
     response: true,
     blocklist: []
   };
-  Object.keys(DEFAULT_VALUE).forEach(k => {
-    if (typeof GM_getValue(k) !== typeof DEFAULT_VALUE[k]) {
-      GM_setValue(k, DEFAULT_VALUE[k]);
+  Object.keys(DEFAULT_GM_VALUE).forEach(k => {
+    if (typeof GM_getValue(k) !== typeof DEFAULT_GM_VALUE[k]) {
+      GM_setValue(k, DEFAULT_GM_VALUE[k]);
     }
   });
-  function valueGetSet (key, val = null) {
+  function gmValueGetSet (key, val = null) {
     if (val != null) GM_setValue(key, val);
     return GM_getValue(key);
+  }
+  const DEFAULT_LOCAL_VALUE = { blocklist: {} };
+  Object.keys(DEFAULT_LOCAL_VALUE).forEach(k => {
+    if (localValueGetSet(k) == null ||
+        typeof localValueGetSet(k) !== typeof DEFAULT_LOCAL_VALUE[k]) {
+      localValueGetSet(k, DEFAULT_LOCAL_VALUE[k]);
+    }
+  });
+  function localValueGetSet (key, val = null) {
+    if (val != null) window.localStorage.setItem(key, JSON.stringify(val));
+    return JSON.parse(window.localStorage.getItem(key));
   }
 
   /* ============== */
@@ -97,7 +108,7 @@
         ' <div class="empty">' + lang.set_empty + '</div>' +
         '</div>');
       const $holder = $('<div class="item_holder"></div>').appendTo($content);
-      const usersInfo = Array.from(valueGetSet('blocklist'),
+      const usersInfo = Array.from(gmValueGetSet('blocklist'),
         id => getUserInfoAsync(id));
       if (usersInfo.length) $content.find('.dashboard .empty').addClass('hide');
       Promise.all(usersInfo).then(infomations => infomations.forEach(info => {
@@ -106,9 +117,9 @@
       $content.find('.search_box>button').on('click', function () {
         const m = this.parentElement.children[0].value.match(/^[A-Za-z]\w+$/);
         if (m) {
-          const blocklist = valueGetSet('blocklist');
+          const blocklist = gmValueGetSet('blocklist');
           blocklist.push(m[0]);
-          valueGetSet('blocklist', blocklist);
+          gmValueGetSet('blocklist', blocklist);
           this.parentElement.children[0].value = '';
           $content.find('.dashboard .empty').addClass('hide');
           getUserInfoAsync(m[0])
@@ -116,8 +127,8 @@
         } else { window.alert(lang.set_alert); }
       });
     }).appendTo('#pop-window-tabs>ul');
-  } else if ($('#nav-account>span').text() ===
-      window.location.pathname.substr(1)) {
+  } else if (window.location.pathname === '/anonymous' ||
+      $('#nav-account>span').text() === window.location.pathname.substr(1)) {
     // timeline
     const cntMo = new MutationObserver(responseMutationTimeline);
     cntMo.observe($('div.block_cnt')[0], { childList: true });
@@ -157,7 +168,9 @@
       mu.addedNodes.forEach(node => {
         if (!node.classList.contains('plurk')) return;
         const u0 = $(node).find('a.name')[0].href.split('/').pop();
-        if (isOnBlockList(u0)) {
+        const u1 = `${node.dataset.pid}:` +
+          (u0 !== 'anonymous' ? u0 : $(node).find('a.name')[0].innerText);
+        if (isOnBlockList(u0) || isOnLocalBlockList(u1)) {
           nBlock += 1;
           node.classList.add('shadow-block');
           if (!$btn.hasClass('show')) node.classList.add('hide');
@@ -196,11 +209,11 @@
     );
     $u.find('a:not(.has_block)').attr('href', '/' + info.id);
     $u.find('a.has_block').on('click', function () {
-      const blocklist = valueGetSet('blocklist');
+      const blocklist = gmValueGetSet('blocklist');
       for (let i = 0; i < blocklist.length; ++i) {
         if (blocklist[i] === this.dataset.id) {
           blocklist.splice(i, 1);
-          valueGetSet('blocklist', blocklist);
+          gmValueGetSet('blocklist', blocklist);
           $u.remove();
           break;
         }
@@ -235,7 +248,14 @@
     });
   }
 
+  function isOnLocalBlockList (user) {
+    user = user.split(':');
+    const list = localValueGetSet('blocklist');
+    return Object.prototype.hasOwnProperty.call(list, user[0]) &&
+           list[user[0]].includes(user[1]);
+  }
+
   function isOnBlockList (user) {
-    return valueGetSet('blocklist').includes(user);
+    return gmValueGetSet('blocklist').includes(user);
   }
 })();
