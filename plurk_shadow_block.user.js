@@ -5,12 +5,13 @@
 // @description:zh-TW 隱形封鎖使用者（只是會在回應和在河道上看不到被封鎖者的發文、轉噗，其他正常）
 // @match        https://www.plurk.com/*
 // @exclude      https://www.plurk.com/_comet/*
-// @version      0.3.4
+// @version      0.3.5a
 // @license      MIT
 // @require      https://code.jquery.com/jquery-3.5.1.min.js
 // @grant        GM_addStyle
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @grant        GM_deleteValue
 // @grant        window.onurlchange
 // ==/UserScript==
 
@@ -53,7 +54,8 @@
   const DEFAULT_VALUE = {
     replurk: true,
     response: true,
-    blocklist: []
+    user_blocks: [],
+    resp_blocks: []
   };
   Object.keys(DEFAULT_VALUE).forEach(k => {
     if (typeof GM_getValue(k) !== typeof DEFAULT_VALUE[k]) {
@@ -98,7 +100,7 @@
         ' <div class="empty">' + lang.set_empty + '</div>' +
         '</div>');
       const $holder = $('<div class="item_holder"></div>').appendTo($content);
-      const usersInfo = Array.from(valueGetSet('blocklist'),
+      const usersInfo = Array.from(valueGetSet('user_blocks'),
         id => getUserInfoAsync(null, id));
       if (usersInfo.length) $content.find('.dashboard .empty').addClass('hide');
       Promise.all(usersInfo).then(infomations => infomations.forEach(info => {
@@ -107,9 +109,9 @@
       $content.find('.search_box>button').on('click', function () {
         const m = this.parentElement.children[0].value.match(/^[A-Za-z]\w+$/);
         if (m) {
-          const blocklist = valueGetSet('blocklist');
+          const blocklist = valueGetSet('user_blocks');
           blocklist.push(m[0]);
-          valueGetSet('blocklist', blocklist);
+          valueGetSet('user_blocks', blocklist);
           this.parentElement.children[0].value = '';
           $content.find('.dashboard .empty').addClass('hide');
           getUserInfoAsync(null, m[0])
@@ -201,11 +203,11 @@
     );
     $u.find('a:not(.has_block)').attr('href', '/' + info.nick_name);
     $u.find('a.has_block').on('click', function () {
-      const blocklist = valueGetSet('blocklist');
+      const blocklist = valueGetSet('user_blocks');
       for (let i = 0; i < blocklist.length; ++i) {
         if (blocklist[i] === this.dataset.id) {
           blocklist.splice(i, 1);
-          valueGetSet('blocklist', blocklist);
+          valueGetSet('user_blocks', blocklist);
           $u.remove();
           break;
         }
@@ -235,6 +237,6 @@
   }
 
   function isOnBlockList (user) {
-    return valueGetSet('blocklist').includes(user);
+    return valueGetSet('user_blocks').includes(user);
   }
 })();
