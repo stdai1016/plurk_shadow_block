@@ -51,11 +51,18 @@
   if (curLang.toLowerCase() in LANG) lang = LANG[curLang.toLowerCase()];
 
   /* ======= storage ======= */
+  /** Struct:
+   *  blocked_users [blocked_user]
+   *  blocked_user {
+   *    uid: int, // user id
+   *    nick_name: str,
+   *    date: UTC_datetime_string,
+   *    pid: null or int // plurk id
+   *  }
+   */
   const DEFAULT_VALUE = {
-    replurk: true,
-    response: true,
-    user_blocks: [],
-    resp_blocks: []
+    blocked_users: [],
+    blocked_max_age: 86400000 * 30 // ms
   };
   Object.keys(DEFAULT_VALUE).forEach(k => {
     if (typeof GM_getValue(k) !== typeof DEFAULT_VALUE[k]) {
@@ -65,6 +72,26 @@
   function valueGetSet (key, val = null) {
     if (val != null) GM_setValue(key, val);
     return GM_getValue(key);
+  }
+
+  function getBlockedUsers (pid = null) {
+    pid = typeof pid === 'string' ? parseInt(pid) : pid;
+    const filter = u => u.pid === null || u.pid === pid;
+    return GM_getValue('blocked_users').filter(filter);
+  }
+  function addBlockedUser (uid, nickName, pid = null) {
+    uid = typeof uid === 'string' ? parseInt(uid) : uid;
+    pid = typeof pid === 'string' ? parseInt(pid) : pid;
+    const date = new Date().toUTCString();
+    const users = GM_getValue('blocked_users');
+    users.push({ uid: uid, nick_name: nickName, date: date, pid: pid });
+    GM_setValue('blocked_users', users);
+  }
+  function removeBlockedUser (uid, pid = null) {
+    uid = typeof uid === 'string' ? parseInt(uid) : uid;
+    pid = typeof pid === 'string' ? parseInt(pid) : pid;
+    const filter = u => !(u.uid === uid && u.pid === pid);
+    GM_setValue('blocked_users', GM_getValue('blocked_users').filter(filter));
   }
 
   /* ============== */
@@ -100,22 +127,20 @@
         ' <div class="empty">' + lang.set_empty + '</div>' +
         '</div>');
       const $holder = $('<div class="item_holder"></div>').appendTo($content);
-      const usersInfo = Array.from(valueGetSet('user_blocks'),
-        id => getUserInfoAsync(null, id));
-      if (usersInfo.length) $content.find('.dashboard .empty').addClass('hide');
-      Promise.all(usersInfo).then(infomations => infomations.forEach(info => {
+      const users = Array.from(getBlockedUsers(), u => getUserInfoAsync(u.uid));
+      if (users.length) $content.find('.dashboard .empty').addClass('hide');
+      Promise.all(users).then(infomations => infomations.forEach(info => {
         makeBlockedUserItem(info, $holder);
       }));
       $content.find('.search_box>button').on('click', function () {
         const m = this.parentElement.children[0].value.match(/^[A-Za-z]\w+$/);
         if (m) {
-          const blocklist = valueGetSet('user_blocks');
-          blocklist.push(m[0]);
-          valueGetSet('user_blocks', blocklist);
-          this.parentElement.children[0].value = '';
-          $content.find('.dashboard .empty').addClass('hide');
-          getUserInfoAsync(null, m[0])
-            .then(info => makeBlockedUserItem(info, $holder));
+          getUserInfoAsync(null, m[0]).then(info => {
+            addBlockedUser(info.id, info.nick_name);
+            this.parentElement.children[0].value = '';
+            $content.find('.dashboard .empty').addClass('hide');
+            makeBlockedUserItem(info, $holder);
+          }).catch(e => window.alert(e));
         } else { window.alert(lang.set_alert); }
       });
     }).appendTo('#pop-window-tabs>ul');
@@ -136,9 +161,9 @@
   function responseMutationTimeline (records) {
     records.forEach(mu => {
       mu.addedNodes.forEach(node => {
-        const up = $(node).find('.td_img>.p_img a')[0].href.split('/').pop();
-        const u0 = $(node).find('.td_qual a.name')[0].href.split('/').pop();
-        if (isOnBlockList(up) || isOnBlockList(u0)) {
+        const idUser = node.querySelector('.td_qual a.name').dataset.uid;
+        const idOwner = node.dataset.uid; // owner_id
+        if (isOnBlockList(idUser) || isOnBlockList(idOwner)) {
           node.classList.add('shadow-block', 'hide');
         }
       });
@@ -159,8 +184,8 @@
       let nBlock = 0;
       mu.addedNodes.forEach(node => {
         if (!node.classList.contains('plurk')) return;
-        const u0 = $(node).find('a.name')[0].href.split('/').pop();
-        if (isOnBlockList(u0)) {
+        const idUser = node.querySelector('a.name').dataset.uid;
+        if (isOnBlockList(idUser)) {
           nBlock += 1;
           node.classList.add('shadow-block');
           if (!$btn.hasClass('show')) node.classList.add('hide');
@@ -183,35 +208,29 @@
   }
 
   function makeBlockedUserItem (info, holder) {
-    const $u = $('<div class="user_item user_blocked_users_item"></div>');
     info.avatar = info.avatar || '';
     const img = info.has_profile_image
       ? `https://avatars.plurk.com/${info.id}-medium${info.avatar}.gif`
       : 'https://www.plurk.com/static/default_medium.jpg';
-    $u.append(
-      '<a class="user_avatar" target="_blank">' +
-        `<img class="profile_pic" src="${img}"></img></a>`,
-      '<div class="user_info">' +
-        '<a class="user_link" target="_blank" style="color:#000">' +
-          `${info.display_name}</a>` +
-        `<span class="nick_name">@${info.nick_name}</span>` +
-        '<div class="more_info"><br></div>' +
-      '</div>',
-      `<div class="user_action"><a void="" data-id="${info.nick_name}" ` +
-        'class="friend_man icon_only pif-user-blocked has_block" ' +
-        `title="${lang.set_remove}"></a></div>`
+    const $u = $(
+      `<div class="user_item user_blocked_users_item" data-uid="${info.id}">` +
+        '<a class="user_avatar" target="_blank">' +
+          `<img class="profile_pic" src="${img}"></img></a>` +
+        '<div class="user_info">' +
+          '<a class="user_link" target="_blank" style="color:#000">' +
+            `${info.display_name}</a>` +
+          `<span class="nick_name">@${info.nick_name}</span>` +
+            '<div class="more_info"><br></div>' +
+        '</div>' +
+        `<div class="user_action"><a void="" data-id="${info.nick_name}" ` +
+          'class="friend_man icon_only pif-user-blocked has_block" ' +
+          `title="${lang.set_remove}"></a></div>` +
+      '</div>'
     );
     $u.find('a:not(.has_block)').attr('href', '/' + info.nick_name);
     $u.find('a.has_block').on('click', function () {
-      const blocklist = valueGetSet('user_blocks');
-      for (let i = 0; i < blocklist.length; ++i) {
-        if (blocklist[i] === this.dataset.id) {
-          blocklist.splice(i, 1);
-          valueGetSet('user_blocks', blocklist);
-          $u.remove();
-          break;
-        }
-      }
+      removeBlockedUser($u.data('uid'));
+      $u.remove();
     });
     $u.appendTo(holder);
   }
@@ -236,7 +255,11 @@
     return resp.json();
   }
 
-  function isOnBlockList (user) {
-    return valueGetSet('user_blocks').includes(user);
+  function isOnBlockList (uid) {
+    uid = typeof uid === 'number' ? uid : parseInt(uid);
+    for (const u of getBlockedUsers()) {
+      if (u.uid === uid) return true;
+    }
+    return false;
   }
 })();
