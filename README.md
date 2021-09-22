@@ -1,3 +1,7 @@
+**本將儲存庫將不再更新，請至下列網址取得最新版本**
+
+[https://github.com/stdai1016/plurk_userscripts/blob/main/plurk_shadow_block.user.js](https://github.com/stdai1016/plurk_userscripts/blob/main/plurk_shadow_block.user.js)
+
 # 噗浪隱形黑名單
 
 隱形封鎖使用者
@@ -33,3 +37,5 @@
 ## 注意事項
 
 * 此黑名單無法跨裝置生效。
+* 本將儲存庫將不再更新，請至下列網址取得最新版本
+[https://github.com/stdai1016/plurk_userscripts/blob/main/plurk_shadow_block.user.js](https://github.com/stdai1016/plurk_userscripts/blob/main/plurk_shadow_block.user.js)
