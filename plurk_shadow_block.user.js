@@ -55,7 +55,7 @@
    *  blocked_users [blocked_user]
    *  blocked_user {
    *    uid: int, // user id
-   *    nick_name: str,
+   *    nick_name: str, // for readability
    *    date: UTC_datetime_string,
    *    pid: null or int // plurk id
    *  }
@@ -74,9 +74,11 @@
     return GM_getValue(key);
   }
 
-  function getBlockedUsers (pid = null) {
+  function getBlockedUsers (pid = null, filter = null) {
     pid = typeof pid === 'string' ? parseInt(pid) : pid;
-    const filter = u => u.pid === null || u.pid === pid;
+    filter = typeof filter === 'function'
+      ? filter
+      : u => u.pid === null || u.pid === pid;
     return GM_getValue('blocked_users').filter(filter);
   }
   function addBlockedUser (uid, nickName, pid = null) {
